@@ -4,6 +4,11 @@ namespace App\Providers;
 
 use App\DemoShop\DemoCatalog;
 use App\DemoShop\PriceSimulator;
+use App\Forecasting\Backtester;
+use App\Forecasting\Models\HoltWinters;
+use App\Forecasting\Models\LinearTrend;
+use App\Forecasting\Models\MovingAverage;
+use App\Forecasting\ModelSelector;
 use App\Jobs\ScrapeListing;
 use App\Scraping\Extractors\CssSelectorExtractor;
 use App\Scraping\Extractors\JsonLdExtractor;
@@ -37,6 +42,12 @@ class AppServiceProvider extends ServiceProvider
             config()->string('app.url'),
             ...array_values(array_filter(config()->array('scraping.trusted_origins'), is_string(...))),
         ]));
+
+        // Simplest first: on a tie the simpler model wins.
+        $this->app->singleton(ModelSelector::class, fn (Application $app): ModelSelector => new ModelSelector(
+            [new MovingAverage, new LinearTrend, new HoltWinters],
+            $app->make(Backtester::class),
+        ));
 
         $this->app->singleton(HtmlPriceExtractor::class, fn (Application $app): HtmlPriceExtractor => new HtmlPriceExtractor([
             $app->make(JsonLdExtractor::class),

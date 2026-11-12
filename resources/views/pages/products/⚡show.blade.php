@@ -1,6 +1,8 @@
 <?php
 
 use App\Enums\ListingStatus;
+use App\Forecasting\Forecaster;
+use App\Forecasting\Signals\WeeklyPromoDetector;
 use App\Jobs\ScrapeListing;
 use App\Models\Listing;
 use App\Models\Product;
@@ -33,10 +35,94 @@ new class extends Component {
     #[Computed]
     public function listings(): Collection
     {
-        return $this->product->listings()->with('store')
+        return $this->product->listings()->with(['store', 'forecast'])
             ->orderByDesc('is_own')
             ->orderByRaw('current_price IS NULL, current_price')
             ->get();
+    }
+
+    /**
+     * Chart series in a stable order (own store first, then by name), so each
+     * store keeps its colour when prices move.
+     *
+     * @return Collection<int, Listing>
+     */
+    #[Computed]
+    public function chartListings(): Collection
+    {
+        return $this->listings->sortBy(fn (Listing $l) => [! $l->is_own, $l->store->name])->values();
+    }
+
+    /**
+     * @return array{today: int, series: list<array<string, mixed>>}
+     */
+    #[Computed]
+    public function chartData(): array
+    {
+        $forecaster = app(Forecaster::class);
+        $ms = fn (string|\Carbon\CarbonInterface $date): int => \Carbon\CarbonImmutable::parse($date)->startOfDay()->getTimestampMs();
+
+        $series = $this->chartListings->map(function (Listing $listing) use ($forecaster, $ms): array {
+            $history = $forecaster->history($listing)->lastDays(90);
+
+            return [
+                'name' => $listing->store->name,
+                'own' => $listing->is_own,
+                'history' => array_map(
+                    fn (float $cents, int $i): array => [$ms($history->start()->addDays($i)), $cents / 100],
+                    $history->values(),
+                    array_keys($history->values()),
+                ),
+                'forecast' => $listing->forecast === null ? null : array_map(
+                    fn (array $p): array => [$ms($p['date']), $p['price'] / 100, $p['lower'] / 100, $p['upper'] / 100],
+                    $listing->forecast->points,
+                ),
+            ];
+        })->all();
+
+        return ['today' => $ms(now()), 'series' => $series];
+    }
+
+    /**
+     * Plain-language takeaways shown above the chart.
+     *
+     * @return list<string>
+     */
+    #[Computed]
+    public function insights(): array
+    {
+        $insights = [];
+        $own = $this->listings->firstWhere('is_own', true);
+        $this->product->setRelation('listings', $this->listings);
+        $cheapest = $this->product->cheapestCompetitor();
+
+        if ($own?->current_price && $cheapest?->current_price) {
+            $gap = ($own->current_price - $cheapest->current_price) / $cheapest->current_price * 100;
+            $name = $cheapest->store->name;
+
+            $insights[] = match (true) {
+                $gap > 0.05 => __('You are :pct% above the cheapest competitor (:store).', ['pct' => number_format($gap, 1), 'store' => $name]),
+                $gap < -0.05 => __('You are the cheapest, :pct% below :store.', ['pct' => number_format(-$gap, 1), 'store' => $name]),
+                default => __('You match the cheapest competitor (:store).', ['store' => $name]),
+            };
+        }
+
+        $detector = new WeeklyPromoDetector;
+        $forecaster = app(Forecaster::class);
+
+        foreach ($this->listings as $listing) {
+            $weekdays = $detector->detect($forecaster->history($listing));
+
+            if ($weekdays !== []) {
+                $names = array_map(fn (int $d) => \Carbon\CarbonImmutable::now()->startOfWeek()->addDays($d - 1)->locale('en')->dayName, $weekdays);
+                $insights[] = __(':store often cuts its price on :days.', [
+                    'store' => $listing->store->name,
+                    'days' => \Illuminate\Support\Arr::join($names, ', ', ' and '),
+                ]);
+            }
+        }
+
+        return $insights;
     }
 
     public function addListing(StoreResolver $stores): void
@@ -135,6 +221,90 @@ new class extends Component {
         </flux:modal.trigger>
     </div>
 
+    @if ($this->insights !== [])
+        <ul class="flex flex-col gap-1">
+            @foreach ($this->insights as $insight)
+                <li><flux:text>{{ $insight }}</flux:text></li>
+            @endforeach
+        </ul>
+    @endif
+
+    @if ($this->listings->isNotEmpty())
+        <section class="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700" aria-labelledby="chart-heading">
+            <div wire:ignore data-price-chart>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <flux:heading id="chart-heading" size="lg">{{ __('Price history and 14-day forecast') }}</flux:heading>
+                    <label class="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+                        {{ __('Forecast for') }}
+                        <select data-forecast-select class="rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800">
+                            @foreach ($this->chartListings as $index => $listing)
+                                <option value="{{ $index }}">{{ $listing->store->name }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                </div>
+                <div data-chart-canvas class="mt-2 min-h-80" role="img" aria-label="{{ __('Price history per store and the forecast of the selected store. The same data is available in the table below.') }}"></div>
+                <script type="application/json" data-chart-data>@json($this->chartData)</script>
+            </div>
+
+            <ul class="mt-3 flex flex-col gap-1">
+                @foreach ($this->chartListings as $listing)
+                    <li>
+                        <flux:text size="sm">
+                            <span class="font-medium">{{ $listing->store->name }}:</span>
+                            @if ($listing->forecast)
+                                {{ __(':model, average error :mape% when tested on the last 4 weeks.', [
+                                    'model' => match ($listing->forecast->model) {
+                                        'holt_winters' => 'Holt-Winters (weekly seasonality)',
+                                        'linear_trend' => __('Linear trend'),
+                                        default => __('Moving average'),
+                                    },
+                                    'mape' => number_format((float) $listing->forecast->mape, 1),
+                                ]) }}
+                            @else
+                                {{ __('Not enough history yet: forecasts start after :days days.', ['days' => Forecaster::MINIMUM_DAYS]) }}
+                            @endif
+                        </flux:text>
+                    </li>
+                @endforeach
+            </ul>
+
+            <details class="mt-3">
+                <summary class="cursor-pointer text-sm text-zinc-600 dark:text-zinc-300">{{ __('Show the forecast as a table') }}</summary>
+                <div class="mt-2 overflow-x-auto">
+                    <table class="w-full text-sm tabular-nums">
+                        <thead>
+                            <tr class="text-left text-zinc-500">
+                                <th scope="col" class="py-1 pe-4 font-medium">{{ __('Date') }}</th>
+                                @foreach ($this->chartListings as $listing)
+                                    <th scope="col" class="py-1 pe-4 font-medium">{{ $listing->store->name }}</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (range(0, Forecaster::HORIZON_DAYS - 1) as $day)
+                                <tr class="border-t border-zinc-100 dark:border-zinc-700">
+                                    <td class="py-1 pe-4">{{ now()->addDays($day + 1)->format('D d M') }}</td>
+                                    @foreach ($this->chartListings as $listing)
+                                        @php $point = $listing->forecast?->points[$day] ?? null; @endphp
+                                        <td class="py-1 pe-4">
+                                            @if ($point)
+                                                {{ Money::format($point['price']) }}
+                                                <span class="text-zinc-500">({{ Money::format($point['lower']) }} – {{ Money::format($point['upper']) }})</span>
+                                            @else
+                                                —
+                                            @endif
+                                        </td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+    @endif
+
     <form wire:submit="addListing" class="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
         <flux:input wire:model="url" type="url" :label="__('Add a store link')" placeholder="https://…" required />
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -160,6 +330,7 @@ new class extends Component {
                 <flux:table.columns>
                     <flux:table.column>{{ __('Store') }}</flux:table.column>
                     <flux:table.column align="end">{{ __('Price') }}</flux:table.column>
+                    <flux:table.column align="end">{{ __('In 14 days') }}</flux:table.column>
                     <flux:table.column>{{ __('Last check') }}</flux:table.column>
                     <flux:table.column>{{ __('Status') }}</flux:table.column>
                     <flux:table.column align="end"><span class="sr-only">{{ __('Actions') }}</span></flux:table.column>
@@ -177,6 +348,16 @@ new class extends Component {
                                 </div>
                             </flux:table.cell>
                             <flux:table.cell align="end" class="tabular-nums">{{ Money::format($listing->current_price, $listing->currency) }}</flux:table.cell>
+                            <flux:table.cell align="end" class="tabular-nums">
+                                @php $last = $listing->forecast?->points[array_key_last($listing->forecast->points ?? [])] ?? null; @endphp
+                                @if ($last && $listing->current_price)
+                                    @php $change = ($last['price'] - $listing->current_price) / $listing->current_price * 100; @endphp
+                                    {{ Money::format($last['price'], $listing->currency) }}
+                                    <span class="text-zinc-500">{{ $change >= 0 ? '+' : '−' }}{{ number_format(abs($change), 1) }}%</span>
+                                @else
+                                    <span class="text-zinc-500">—</span>
+                                @endif
+                            </flux:table.cell>
                             <flux:table.cell>{{ $listing->last_checked_at?->diffForHumans() ?? __('Never') }}</flux:table.cell>
                             <flux:table.cell>
                                 @switch($listing->status)
@@ -219,6 +400,13 @@ new class extends Component {
             </flux:table>
         @endif
     </div>
+
+    @script
+    <script>
+        const mount = () => window.PriceWatch.mountPriceChart($wire.$el.querySelector('[data-price-chart]'));
+        window.PriceWatch ? mount() : window.addEventListener('pricewatch:ready', mount, { once: true });
+    </script>
+    @endscript
 
     <flux:modal name="delete-product" class="max-w-md">
         <div class="space-y-6">

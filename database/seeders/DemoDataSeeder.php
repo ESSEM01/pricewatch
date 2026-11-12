@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\DemoShop\DemoCatalog;
 use App\DemoShop\PriceSimulator;
+use App\Jobs\RefreshForecast;
 use App\Models\Listing;
 use App\Models\PricePoint;
 use App\Models\User;
@@ -69,6 +70,9 @@ class DemoDataSeeder extends Seeder
                     'last_checked_at' => $today,
                     'next_check_at' => null, // due now: the scheduler picks it up
                 ])->save();
+
+                // Synchronously, so the demo shows forecasts without a queue worker.
+                RefreshForecast::dispatchSync($listing);
             }
         }
     }
