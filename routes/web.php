@@ -1,12 +1,16 @@
 <?php
 
+use App\Http\Controllers\DemoLoginController;
 use App\Http\Controllers\DemoShopController;
+use App\Http\Controllers\LandingController;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+Route::get('/', LandingController::class)->name('home');
+Route::view('bot', 'bot')->name('bot');
+Route::post('demo/login', DemoLoginController::class)->middleware(['guest', 'throttle:10,1'])->name('demo.login');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::view('dashboard', 'dashboard')->name('dashboard');
+    Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
 
     Route::livewire('products', 'pages::products.index')->name('products.index');
     Route::livewire('products/{product}', 'pages::products.show')->name('products.show');

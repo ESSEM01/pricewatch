@@ -99,17 +99,20 @@ database/
 - [x] Evento `PriceChanged`, `DemoDataSeeder` (10 prodotti × 3 negozi, 180 giorni).
 - [x] CRUD prodotti/link in Livewire con policy, validazione `SafeUrl`, "controlla ora", pausa/riprendi.
 
-**Settimana 3 — previsione e alert**
-- [ ] Modelli di previsione + backtester + selector (TDD con serie sintetiche a risposta nota).
-- [ ] Pagina prodotto con grafico storico + banda previsione.
-- [ ] Regole alert, notifiche email + in-app.
-- [ ] API Sanctum + test feature.
+**Settimana 3 — previsione e alert** ✅ (branch `week-3-forecasting`, `week-3-alerts`, `week-3-api`)
+- [x] Media mobile, trend lineare, Holt-Winters settimanale; backtest walk-forward su 4 settimane; vince il MAE minore, a parità il modello più semplice.
+- [x] Banda al 95% dall'RMSE del backtest, crescente con l'orizzonte; rilevatore di promo ricorrenti per giorno della settimana.
+- [x] Grafico ApexCharts (8.5.0, caricato solo sulla pagina prodotto), palette validata per daltonismo, vista tabellare.
+- [x] Regole alert (sotto soglia, concorrente sotto il mio prezzo, variazione %) con scatto all'attraversamento e cooldown atomico di 24h; notifiche mail + in-app.
+- [x] API Sanctum read-only con token personali, rate limit 60/min, `docs/API.md`.
 
-**Settimana 4 — rifinitura e consegna**
-- [ ] Dashboard KPI, empty state, stati di errore, responsive.
-- [ ] Deploy (es. Fly.io o VPS con Forge/Ploi): worker coda + scheduler attivi, utente demo, reset notturno dei dati demo.
-- [ ] README: screenshot/GIF, diagramma architettura, "come funziona la previsione", limiti noti, scelte tecniche.
-- [ ] Buffer per bug e un'ora di prova del pitch.
+**Settimana 4 — rifinitura e consegna** (branch `week-4-polish`)
+- [x] Dashboard: KPI tipografici, prodotti in cui sei sotto-quotato con "price ladder", variazioni 24h via `LAG()`, empty state, responsive.
+- [x] Home pubblica con i prezzi reali del Demo Shop di oggi, "Prova la demo" in un clic, pagina `/bot`.
+- [x] `demo:reset` (notturno se `DEMO_NIGHTLY_RESET=true`); markup demo bilanciati.
+- [x] README con screenshot, architettura, limiti.
+- [ ] Deploy: richiede un account di hosting (Fly.io, Forge/Ploi o VPS). Serve worker coda + `schedule:work`.
+- [ ] Prova del pitch.
 
 ## 6. Criteri di accettazione (verificabili)
 

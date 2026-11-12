@@ -15,13 +15,21 @@ return [
 
     'enabled' => env('DEMO_SHOP_ENABLED', true),
 
+    // "Try the demo" button on the home page: signs in as the seeded demo user.
+    'demo_login' => env('DEMO_LOGIN', true),
+
+    // Rebuild the demo account every night (for a public demo server).
+    'nightly_reset' => env('DEMO_NIGHTLY_RESET', false),
+
     // Day zero for the time-based pricing strategies.
     'anchor_date' => '2026-01-01',
 
     'stores' => [
         'tecnoshop' => ['name' => 'TecnoShop', 'strategy' => 'weekend_promo', 'markup' => 1.00],
-        'elettrocasa' => ['name' => 'ElettroCasa', 'strategy' => 'trend_down', 'markup' => 1.04],
-        'prezzopazzo' => ['name' => 'PrezzoPazzo', 'strategy' => 'volatile', 'markup' => 0.97],
+        // Markups chosen so the demo user's store (TecnoShop) is sometimes the
+        // cheapest and sometimes undercut, depending on the day.
+        'elettrocasa' => ['name' => 'ElettroCasa', 'strategy' => 'trend_down', 'markup' => 1.12],
+        'prezzopazzo' => ['name' => 'PrezzoPazzo', 'strategy' => 'volatile', 'markup' => 1.02],
     ],
 
     'products' => [
