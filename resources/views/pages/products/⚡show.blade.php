@@ -1,6 +1,10 @@
 <?php
 
+use App\Enums\AlertRuleType;
 use App\Enums\ListingStatus;
+use App\Models\AlertRule;
+use App\Scraping\Money\PriceParser;
+use Illuminate\Validation\Rule;
 use App\Forecasting\Forecaster;
 use App\Forecasting\Signals\WeeklyPromoDetector;
 use App\Jobs\ScrapeListing;
@@ -21,6 +25,11 @@ new class extends Component {
     public string $url = '';
 
     public bool $isOwn = false;
+
+    public string $ruleType = 'competitor_undercut';
+
+    /** Euros for "below", percent for "change", unused for "undercut". */
+    public string $ruleThreshold = '';
 
     public function mount(Product $product): void
     {
@@ -179,6 +188,73 @@ new class extends Component {
     public function removeListing(int $listingId): void
     {
         $this->ownedListing($listingId)->delete();
+    }
+
+    /**
+     * @return Collection<int, AlertRule>
+     */
+    #[Computed]
+    public function rules(): Collection
+    {
+        return $this->product->alertRules()->orderBy('id')->get();
+    }
+
+    public function addRule(PriceParser $parser): void
+    {
+        $this->authorize('update', $this->product);
+
+        $this->validate(['ruleType' => ['required', Rule::enum(AlertRuleType::class)]]);
+        $type = AlertRuleType::from($this->ruleType);
+
+        $threshold = match ($type) {
+            AlertRuleType::CompetitorUndercut => null,
+            AlertRuleType::BelowThreshold => $parser->parse($this->ruleThreshold)?->amount,
+            AlertRuleType::ChangePercent => is_numeric($percent = str_replace(',', '.', trim($this->ruleThreshold)))
+                ? (int) round((float) $percent * 100)
+                : null,
+        };
+
+        $valid = match ($type) {
+            AlertRuleType::CompetitorUndercut => true,
+            AlertRuleType::BelowThreshold => $threshold !== null && $threshold > 0,
+            AlertRuleType::ChangePercent => $threshold !== null && $threshold > 0 && $threshold <= 10_000,
+        };
+
+        if (! $valid) {
+            $this->addError('ruleThreshold', $type === AlertRuleType::ChangePercent
+                ? __('Enter a percentage between 0 and 100.')
+                : __('Enter a price, e.g. 499,90.'));
+
+            return;
+        }
+
+        $rule = new AlertRule(['type' => $type, 'threshold' => $threshold]);
+        $rule->user()->associate($this->product->user);
+        $this->product->alertRules()->save($rule);
+
+        $this->reset('ruleThreshold');
+        unset($this->rules);
+        Flux::toast(variant: 'success', text: __('Alert rule added.'));
+    }
+
+    public function toggleRule(int $ruleId): void
+    {
+        $rule = $this->ownedRule($ruleId);
+        $rule->forceFill(['is_active' => ! $rule->is_active])->save();
+        unset($this->rules);
+    }
+
+    public function deleteRule(int $ruleId): void
+    {
+        $this->ownedRule($ruleId)->delete();
+        unset($this->rules);
+    }
+
+    private function ownedRule(int $ruleId): AlertRule
+    {
+        $this->authorize('update', $this->product);
+
+        return $this->product->alertRules()->findOrFail($ruleId);
     }
 
     public function deleteProduct(): void
@@ -400,6 +476,41 @@ new class extends Component {
             </flux:table>
         @endif
     </div>
+
+    <section class="flex flex-col gap-3" aria-labelledby="alerts-heading">
+        <flux:heading id="alerts-heading" size="lg">{{ __('Alerts') }}</flux:heading>
+
+        @foreach ($this->rules as $rule)
+            <div wire:key="rule-{{ $rule->id }}" class="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+                <flux:text @class(['line-through opacity-60' => ! $rule->is_active])>
+                    {{ match ($rule->type) {
+                        AlertRuleType::BelowThreshold => __('Any store goes below :price', ['price' => Money::format($rule->threshold)]),
+                        AlertRuleType::CompetitorUndercut => __('A competitor goes below my price'),
+                        AlertRuleType::ChangePercent => __('Any store moves by :pct% or more', ['pct' => rtrim(rtrim(number_format(($rule->threshold ?? 0) / 100, 2), '0'), '.')]),
+                    } }}
+                    @if ($rule->last_triggered_at)
+                        <span class="text-zinc-500">· {{ __('last sent :when', ['when' => $rule->last_triggered_at->diffForHumans()]) }}</span>
+                    @endif
+                </flux:text>
+                <div class="flex shrink-0 gap-1">
+                    <flux:button size="sm" variant="ghost" wire:click="toggleRule({{ $rule->id }})">{{ $rule->is_active ? __('Pause') : __('Resume') }}</flux:button>
+                    <flux:button size="sm" variant="ghost" icon="trash" wire:click="deleteRule({{ $rule->id }})" :aria-label="__('Delete rule')" />
+                </div>
+            </div>
+        @endforeach
+
+        <form wire:submit="addRule" class="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <flux:select wire:model.live="ruleType" :label="__('Notify me when')" class="sm:max-w-xs">
+                <flux:select.option value="competitor_undercut">{{ __('A competitor goes below my price') }}</flux:select.option>
+                <flux:select.option value="below_threshold">{{ __('Any store goes below a price') }}</flux:select.option>
+                <flux:select.option value="change_percent">{{ __('Any store moves by a percentage') }}</flux:select.option>
+            </flux:select>
+            @if ($ruleType !== 'competitor_undercut')
+                <flux:input wire:model="ruleThreshold" :label="$ruleType === 'change_percent' ? __('Percent') : __('Price (€)')" :placeholder="$ruleType === 'change_percent' ? '5' : '499,90'" inputmode="decimal" class="sm:max-w-32" />
+            @endif
+            <flux:button type="submit" icon="bell">{{ __('Add alert') }}</flux:button>
+        </form>
+    </section>
 
     @script
     <script>
