@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- The first block is broken JSON, as found on real shops: it must be skipped, not fatal. -->
+    <script type="application/ld+json">{ "@type": "Product", "name": "Broken", </script>
+    <script type="application/ld+json">
+    [
+        { "@context": "https://schema.org", "@type": "Organization", "name": "Shop" },
+        {
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "name": "Smart TV 55",
+            "offers": {
+                "@type": "AggregateOffer",
+                "lowPrice": "199,99",
+                "highPrice": "249,99",
+                "priceCurrency": "USD"
+            }
+        }
+    ]
+    </script>
+</head>
+<body><h1>Smart TV 55</h1></body>
+</html>

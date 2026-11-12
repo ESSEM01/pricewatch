@@ -49,6 +49,18 @@ class Product extends Model
         return $this->hasOne(Listing::class)->where('is_own', true);
     }
 
+    /**
+     * The cheapest competitor listing with a known price, from the loaded listings.
+     */
+    public function cheapestCompetitor(): ?Listing
+    {
+        return $this->listings
+            ->where('is_own', false)
+            ->whereNotNull('current_price')
+            ->sortBy('current_price')
+            ->first();
+    }
+
     /** @return HasMany<AlertRule, $this> */
     public function alertRules(): HasMany
     {

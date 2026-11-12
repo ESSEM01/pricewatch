@@ -92,11 +92,12 @@ database/
 > - Larastan a livello 7 invece di 6 (default dello starter kit).
 > - Il trend del negozio "ElettroCasa" è ciclico (90 giorni) invece che lineare: uno lineare toccava il minimo a maggio e restava piatto.
 
-**Settimana 2 — scraping e storico**
-- [ ] Estrattori JSON-LD / OG / CSS (TDD con fixture HTML in `tests/Fixtures/html/`).
-- [ ] `ScrapeListing` job, scheduler, rate limit, gestione errori (listing marcato "in errore" dopo 3 fallimenti).
-- [ ] Evento `PriceChanged`, `DemoDataSeeder` con 180 giorni di storico.
-- [ ] CRUD prodotti/listing in Livewire.
+**Settimana 2 — scraping e storico** ✅
+- [x] Estrattori JSON-LD / OG / CSS (TDD con fixture HTML in `tests/Fixtures/html/`), parser HTML5 nativo di PHP 8.4+ (`Dom\HTMLDocument`), nessuna dipendenza.
+- [x] Fetch sicuro: `UrlGuard` anti-SSRF (solo IP pubblici, porte 80/443, IP pinnato contro DNS rebinding, controllo a ogni redirect), `robots.txt` (RFC 9309) con cache.
+- [x] `ScrapeListing` job, `scrape:due` ogni 10 minuti con lease, rate limit per negozio, retry a 15/30 min e back-off di 6h dopo 3 errori o subito se permanente (404, robots, URL bloccato).
+- [x] Evento `PriceChanged`, `DemoDataSeeder` (10 prodotti × 3 negozi, 180 giorni).
+- [x] CRUD prodotti/link in Livewire con policy, validazione `SafeUrl`, "controlla ora", pausa/riprendi.
 
 **Settimana 3 — previsione e alert**
 - [ ] Modelli di previsione + backtester + selector (TDD con serie sintetiche a risposta nota).

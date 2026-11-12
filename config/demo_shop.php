@@ -31,6 +31,10 @@ return [
         'ps5-slim' => ['name' => 'Sony PlayStation 5 Slim', 'base_price' => 54_999],
         'dyson-v15' => ['name' => 'Dyson V15 Detect', 'base_price' => 69_900],
         'kindle-paperwhite' => ['name' => 'Kindle Paperwhite 16GB', 'base_price' => 16_999],
+        'macbook-air-13-m4' => ['name' => 'Apple MacBook Air 13" M4', 'base_price' => 124_900],
+        'switch-2' => ['name' => 'Nintendo Switch 2', 'base_price' => 46_999],
+        'forerunner-265' => ['name' => 'Garmin Forerunner 265', 'base_price' => 44_999],
+        'lg-oled-c4-55' => ['name' => 'LG OLED evo C4 55"', 'base_price' => 149_900],
     ],
 
 ];
