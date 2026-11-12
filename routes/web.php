@@ -7,6 +7,9 @@ Route::view('/', 'welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::view('dashboard', 'dashboard')->name('dashboard');
+
+    Route::livewire('products', 'pages::products.index')->name('products.index');
+    Route::livewire('products/{product}', 'pages::products.show')->name('products.show');
 });
 
 if (config('demo_shop.enabled')) {
