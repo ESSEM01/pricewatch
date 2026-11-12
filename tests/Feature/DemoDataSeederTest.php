@@ -2,6 +2,7 @@
 
 use App\DemoShop\DemoCatalog;
 use App\DemoShop\PriceSimulator;
+use App\Models\Forecast;
 use App\Models\Listing;
 use App\Models\Product;
 use App\Models\Store;
@@ -50,6 +51,12 @@ it('ends each history at today\'s simulated price and queues a check', function 
         ->and($listing->pricePoints()->max('recorded_at'))->toStartWith('2026-11-12')
         ->and($listing->pricePoints()->min('recorded_at'))->toStartWith('2026-05-17') // 180 days including today
         ->and(Listing::query()->due()->count())->toBe(Listing::query()->count());
+});
+
+it('precomputes a forecast for every listing', function () {
+    $this->seed(DemoDataSeeder::class);
+
+    expect(Forecast::query()->count())->toBe(Listing::query()->count());
 });
 
 it('can run twice without duplicating data', function () {
