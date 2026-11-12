@@ -18,6 +18,7 @@ use App\Scraping\Http\UrlGuard;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
@@ -62,6 +63,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        RateLimiter::for('api', fn (Request $request): Limit => Limit::perMinute(60)
+            ->by($request->user()?->id ?: $request->ip()));
 
         // Politeness: a few requests per minute per store, whatever the queue size.
         RateLimiter::for('scraping', fn (object $job): Limit => Limit::perMinute((int) config('scraping.requests_per_minute_per_store'))
