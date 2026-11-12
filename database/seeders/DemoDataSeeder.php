@@ -36,7 +36,8 @@ class DemoDataSeeder extends Seeder
             'email_verified_at' => now(),
         ]);
 
-        $user->products()->delete(); // cascades to listings and price points
+        $user->products()->delete(); // cascades to listings, price points, forecasts and rules
+        $user->notifications()->delete(); // they would link to products that no longer exist
 
         $today = now()->startOfDay()->setTime(self::CHECK_HOUR, 0);
 

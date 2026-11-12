@@ -9,6 +9,7 @@ use App\Models\Store;
 use App\Models\User;
 use Database\Seeders\DemoDataSeeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 beforeEach(function () {
     Carbon::setTestNow('2026-11-12 10:00:00');
@@ -57,6 +58,16 @@ it('precomputes a forecast for every listing', function () {
     $this->seed(DemoDataSeeder::class);
 
     expect(Forecast::query()->count())->toBe(Listing::query()->count());
+});
+
+it('clears old alerts, which would point to deleted products', function () {
+    $this->seed(DemoDataSeeder::class);
+    $user = User::query()->where('email', DemoDataSeeder::EMAIL)->sole();
+    $user->notifications()->create(['id' => (string) Str::uuid(), 'type' => 'test', 'data' => []]);
+
+    $this->seed(DemoDataSeeder::class);
+
+    expect($user->notifications()->count())->toBe(0);
 });
 
 it('can run twice without duplicating data', function () {
