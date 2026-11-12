@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\DemoShop\DemoCatalog;
+use App\DemoShop\PriceSimulator;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +17,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(DemoCatalog::class, fn (): DemoCatalog => DemoCatalog::fromConfig(config('demo_shop')));
+
+        $this->app->singleton(PriceSimulator::class, fn (): PriceSimulator => new PriceSimulator(
+            CarbonImmutable::parse(config('demo_shop.anchor_date')),
+        ));
     }
 
     /**
