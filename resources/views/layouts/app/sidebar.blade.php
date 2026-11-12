@@ -18,6 +18,10 @@
                     <flux:sidebar.item icon="shopping-bag" :href="route('products.index')" :current="request()->routeIs('products.*')" wire:navigate>
                         {{ __('Products') }}
                     </flux:sidebar.item>
+                    @php $unreadAlerts = auth()->user()->unreadNotifications()->count(); @endphp
+                    <flux:sidebar.item icon="bell" :href="route('alerts.index')" :current="request()->routeIs('alerts.*')" :badge="$unreadAlerts ?: null" data-unread-alerts="{{ $unreadAlerts }}" wire:navigate>
+                        {{ __('Alerts') }}
+                    </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 

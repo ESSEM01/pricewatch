@@ -4,7 +4,9 @@ namespace Database\Seeders;
 
 use App\DemoShop\DemoCatalog;
 use App\DemoShop\PriceSimulator;
+use App\Enums\AlertRuleType;
 use App\Jobs\RefreshForecast;
+use App\Models\AlertRule;
 use App\Models\Listing;
 use App\Models\PricePoint;
 use App\Models\User;
@@ -43,6 +45,10 @@ class DemoDataSeeder extends Seeder
                 'name' => $demoProduct->name,
                 'sku' => strtoupper($demoProduct->slug),
             ]);
+
+            $rule = new AlertRule(['type' => AlertRuleType::CompetitorUndercut]);
+            $rule->user()->associate($user);
+            $product->alertRules()->save($rule);
 
             foreach ($catalog->stores() as $index => $demoStore) {
                 $url = route('demo-shop.product', [$demoStore->slug, $demoProduct->slug]);
