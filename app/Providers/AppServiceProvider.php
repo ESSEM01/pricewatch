@@ -9,6 +9,7 @@ use App\Forecasting\Models\HoltWinters;
 use App\Forecasting\Models\LinearTrend;
 use App\Forecasting\Models\MovingAverage;
 use App\Forecasting\ModelSelector;
+use App\Http\Middleware\ProtectDemoAccount;
 use App\Jobs\ScrapeListing;
 use App\Scraping\Extractors\CssSelectorExtractor;
 use App\Scraping\Extractors\JsonLdExtractor;
@@ -24,6 +25,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Livewire\Component;
+
+use function Livewire\before;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -63,6 +67,12 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        // "before": Livewire runs event listeners and magic actions inside its own
+        // "call" handlers, so the guard must come first to stop them.
+        before('call', function (Component $component, string $method): void {
+            ProtectDemoAccount::guardLivewireCall($component, $method);
+        });
 
         RateLimiter::for('api', fn (Request $request): Limit => Limit::perMinute(60)
             ->by($request->user()?->id ?: $request->ip()));

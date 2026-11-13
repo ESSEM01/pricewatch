@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Database\Seeders\DemoDataSeeder;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -60,6 +61,14 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public function alertRules(): HasMany
     {
         return $this->hasMany(AlertRule::class);
+    }
+
+    /**
+     * The shared account behind "Try the demo", whose password is public.
+     */
+    public function isDemo(): bool
+    {
+        return $this->email === DemoDataSeeder::EMAIL;
     }
 
     /**
