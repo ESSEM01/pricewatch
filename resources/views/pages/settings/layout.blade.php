@@ -15,6 +15,12 @@
         <flux:subheading>{{ $subheading ?? '' }}</flux:subheading>
 
         <div class="mt-5 w-full max-w-lg">
+            @if (auth()->user()?->isDemo())
+                <flux:callout icon="lock-closed" class="mb-6">
+                    <flux:callout.text>{{ __('This is the shared demo account: its settings are read-only.') }}</flux:callout.text>
+                </flux:callout>
+            @endif
+
             {{ $slot }}
         </div>
     </div>

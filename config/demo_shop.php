@@ -16,9 +16,11 @@ return [
     'enabled' => env('DEMO_SHOP_ENABLED', true),
 
     // "Try the demo" button on the home page: signs in as the seeded demo user.
-    'demo_login' => env('DEMO_LOGIN', true),
+    // On by default only in local development; a public server opts in.
+    'demo_login' => env('DEMO_LOGIN', env('APP_ENV') === 'local'),
 
-    // Rebuild the demo account every night (for a public demo server).
+    // Rebuild the demo account every night. Set it on a public demo server:
+    // visitors share the account and can change its products and alerts.
     'nightly_reset' => env('DEMO_NIGHTLY_RESET', false),
 
     // Day zero for the time-based pricing strategies.

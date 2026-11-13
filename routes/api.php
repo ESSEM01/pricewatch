@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Route;
 | See docs/API.md.
 */
 
-Route::middleware(['auth:sanctum', 'throttle:api'])->name('api.')->group(function () {
+Route::middleware(['auth:sanctum', 'abilities:read', 'throttle:api'])->name('api.')->group(function () {
     Route::get('products', [ProductController::class, 'index'])->name('products.index');
     Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
     Route::get('products/{product}/history', [ProductController::class, 'history'])->name('products.history');

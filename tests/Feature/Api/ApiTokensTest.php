@@ -44,3 +44,24 @@ it('revokes a token, only the user\'s own', function () {
     $component->call('revokeToken', $foreign->id)->assertNotFound();
     expect($foreign->fresh())->not->toBeNull();
 });
+
+it('refuses tokens without the read ability', function () {
+    $plain = $this->user->createToken('no abilities', [])->plainTextToken;
+    auth()->forgetGuards();
+
+    $this->withToken($plain)->getJson('/api/products')->assertForbidden();
+});
+
+it('lets tokens expire after 90 days by default', function () {
+    expect(config('sanctum.expiration'))->toBe(60 * 24 * 90);
+
+    $plain = $this->user->createToken('old', ['read'])->plainTextToken;
+    auth()->forgetGuards();
+
+    $this->travel(89)->days();
+    $this->withToken($plain)->getJson('/api/products')->assertOk();
+
+    auth()->forgetGuards();
+    $this->travel(2)->days();
+    $this->withToken($plain)->getJson('/api/products')->assertUnauthorized();
+});

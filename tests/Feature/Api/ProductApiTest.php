@@ -30,7 +30,7 @@ it('requires a token', function () {
 it('lists the user\'s products with their price position', function () {
     $product = apiProduct($this->user);
     apiProduct(User::factory()->create());
-    Sanctum::actingAs($this->user);
+    Sanctum::actingAs($this->user, ['read']);
 
     $this->getJson('/api/products')
         ->assertOk()
@@ -46,7 +46,7 @@ it('lists the user\'s products with their price position', function () {
 
 it('shows one product with its listings', function () {
     $product = apiProduct($this->user);
-    Sanctum::actingAs($this->user);
+    Sanctum::actingAs($this->user, ['read']);
 
     $this->getJson("/api/products/{$product->id}")
         ->assertOk()
@@ -59,7 +59,7 @@ it('shows one product with its listings', function () {
 
 it('hides other users\' products', function (string $path) {
     $foreign = apiProduct(User::factory()->create());
-    Sanctum::actingAs($this->user);
+    Sanctum::actingAs($this->user, ['read']);
 
     $this->getJson(str_replace('{id}', (string) $foreign->id, $path))->assertForbidden();
 })->with(['/api/products/{id}', '/api/products/{id}/history', '/api/products/{id}/forecast']);
@@ -69,7 +69,7 @@ it('returns price history for the requested window', function () {
     $listing = $product->listings()->where('is_own', true)->sole();
     PricePoint::factory()->for($listing)->create(['price' => 50990, 'recorded_at' => now()->subDays(40)]);
     PricePoint::factory()->for($listing)->create(['price' => 49990, 'recorded_at' => now()->subDays(5)]);
-    Sanctum::actingAs($this->user);
+    Sanctum::actingAs($this->user, ['read']);
 
     $this->getJson("/api/products/{$product->id}/history?days=30")
         ->assertOk()
@@ -81,7 +81,7 @@ it('returns price history for the requested window', function () {
 
 it('validates the history window', function (string $days) {
     $product = apiProduct($this->user);
-    Sanctum::actingAs($this->user);
+    Sanctum::actingAs($this->user, ['read']);
 
     $this->getJson("/api/products/{$product->id}/history?days={$days}")->assertUnprocessable()->assertJsonValidationErrors('days');
 })->with(['0', '400', 'abc']);
@@ -90,7 +90,7 @@ it('returns forecasts per listing', function () {
     $product = apiProduct($this->user);
     $listing = $product->listings()->where('is_own', true)->sole();
     Forecast::factory()->for($listing)->create(['model' => 'holt_winters', 'mape' => 2.5]);
-    Sanctum::actingAs($this->user);
+    Sanctum::actingAs($this->user, ['read']);
 
     $this->getJson("/api/products/{$product->id}/forecast")
         ->assertOk()
@@ -103,7 +103,7 @@ it('returns forecasts per listing', function () {
 
 it('answers 422 when no listing has enough history to forecast', function () {
     $product = apiProduct($this->user);
-    Sanctum::actingAs($this->user);
+    Sanctum::actingAs($this->user, ['read']);
 
     $this->getJson("/api/products/{$product->id}/forecast")
         ->assertUnprocessable()
@@ -111,7 +111,7 @@ it('answers 422 when no listing has enough history to forecast', function () {
 });
 
 it('rate limits each user', function () {
-    Sanctum::actingAs($this->user);
+    Sanctum::actingAs($this->user, ['read']);
 
     $this->getJson('/api/products')->assertOk()->assertHeader('X-RateLimit-Limit', '60');
 });

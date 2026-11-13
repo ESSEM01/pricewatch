@@ -32,7 +32,20 @@ php artisan schedule:work
 ```
 
 Open http://localhost:8000 and press **Try the demo**, or log in as
-`demo@pricewatch.test` / `password`.
+`demo@pricewatch.test` / `password`. The demo account is shared, so its
+settings (profile, password, 2FA, passkeys, API tokens, account deletion) are
+read-only.
+
+### Running a public demo
+
+The **Try the demo** button is on by default only with `APP_ENV=local`. On a
+public server, opt in and rebuild the shared account every night, since
+visitors can change its products and alerts:
+
+```dotenv
+DEMO_LOGIN=true
+DEMO_NIGHTLY_RESET=true   # runs demo:reset at 04:00 (needs the scheduler)
+```
 
 The demo stores live inside the app at `/demo-shop`: fictional shops whose
 prices move every day (fortnightly weekend promos, a slow downward cycle,
@@ -87,7 +100,7 @@ rotation, headless rendering, TimescaleDB).
 ## Quality
 
 ```bash
-composer test   # Pint, Larastan level 7, Pest (286 tests)
+composer test   # Pint, Larastan level 7, Pest (339 tests)
 ```
 
 CI runs the same checks plus `composer audit` on every push. The test suite

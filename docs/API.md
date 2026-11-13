@@ -7,7 +7,8 @@ returns data you own (other users' products answer `403`).
 ## Authentication
 
 Create a token in **Settings → API tokens**. It is shown once; store it like
-a password. Tokens are read-only and can be revoked from the same page.
+a password. Tokens are read-only (`read` ability), expire after **90 days**
+(`SANCTUM_EXPIRATION`, in minutes) and can be revoked from the same page.
 
 ```bash
 export PW_TOKEN="1|…"

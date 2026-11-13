@@ -51,7 +51,8 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Personal API tokens stop working after 90 days unless set otherwise.
+    'expiration' => (int) env('SANCTUM_EXPIRATION', 60 * 24 * 90),
 
     /*
     |--------------------------------------------------------------------------

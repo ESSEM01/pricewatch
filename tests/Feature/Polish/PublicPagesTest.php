@@ -36,6 +36,7 @@ it('explains the bot that the user agent links to', function () {
 });
 
 it('signs visitors into the demo account in one click', function () {
+    config(['demo_shop.demo_login' => true]);
     $this->seed(DemoDataSeeder::class);
 
     $this->post(route('demo.login'))->assertRedirect(route('dashboard'));
