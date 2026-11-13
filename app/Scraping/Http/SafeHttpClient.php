@@ -2,6 +2,7 @@
 
 namespace App\Scraping\Http;
 
+use App\Scraping\Exceptions\ResponseTooLarge;
 use App\Scraping\Exceptions\UnsafeUrl;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
@@ -19,17 +20,20 @@ final class SafeHttpClient
     public function __construct(private readonly UrlGuard $guard) {}
 
     /**
+     * @param  int|null  $maxBytes  Stop downloading a body larger than this.
+     *
      * @throws UnsafeUrl
      * @throws ConnectionException
+     * @throws ResponseTooLarge
      */
-    public function get(string $url): Response
+    public function get(string $url, ?int $maxBytes = null): Response
     {
         $maxRedirects = (int) config('scraping.max_redirects');
 
         // Redirects are followed here, not by Guzzle: curl would resolve the
         // next host again, unpinned, and on whatever port the server chose.
         for ($redirects = 0; ; $redirects++) {
-            $response = $this->send($url);
+            $response = $this->send($url, $maxBytes);
             $location = $response->redirect() ? $response->header('Location') : '';
 
             if ($location === '') {
@@ -49,8 +53,9 @@ final class SafeHttpClient
      *
      * @throws UnsafeUrl
      * @throws ConnectionException
+     * @throws ResponseTooLarge
      */
-    private function send(string $url): Response
+    private function send(string $url, ?int $maxBytes): Response
     {
         $pinnedIp = $this->guard->assertAllowed($url);
 
@@ -61,11 +66,28 @@ final class SafeHttpClient
             $options['curl'] = [CURLOPT_RESOLVE => [$this->resolveEntry($url, $pinnedIp)]];
         }
 
-        return Http::withUserAgent((string) config('scraping.user_agent'))
-            ->timeout((int) config('scraping.timeout_seconds'))
-            ->connectTimeout((int) config('scraping.connect_timeout_seconds'))
-            ->withOptions($options)
-            ->get($url);
+        $tooLarge = null;
+
+        if ($maxBytes !== null) {
+            // curl reports the declared length as soon as the headers arrive, then
+            // the bytes received so far; returning true aborts the transfer.
+            $options['progress'] = function (int $downloadTotal, int $downloaded) use ($maxBytes, &$tooLarge): bool {
+                $bytes = max($downloadTotal, $downloaded);
+                $tooLarge = $bytes > $maxBytes ? $bytes : null;
+
+                return $tooLarge !== null;
+            };
+        }
+
+        try {
+            return Http::withUserAgent((string) config('scraping.user_agent'))
+                ->timeout((int) config('scraping.timeout_seconds'))
+                ->connectTimeout((int) config('scraping.connect_timeout_seconds'))
+                ->withOptions($options)
+                ->get($url);
+        } catch (ConnectionException $e) {
+            throw $tooLarge !== null ? ResponseTooLarge::after($tooLarge) : $e;
+        }
     }
 
     /**

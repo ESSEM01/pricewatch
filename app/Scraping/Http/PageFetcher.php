@@ -2,6 +2,7 @@
 
 namespace App\Scraping\Http;
 
+use App\Scraping\Exceptions\ResponseTooLarge;
 use App\Scraping\Exceptions\ScrapeFailed;
 use App\Scraping\Exceptions\UnsafeUrl;
 use Illuminate\Http\Client\ConnectionException;
@@ -22,14 +23,19 @@ final class PageFetcher
      */
     public function fetch(string $url): string
     {
+        $maxBytes = (int) config('scraping.max_body_bytes');
+
         try {
             if (! $this->robots->allows($url)) {
                 throw ScrapeFailed::disallowedByRobots($url);
             }
 
-            $response = $this->http->get($url);
+            // The client stops the transfer once it passes the limit.
+            $response = $this->http->get($url, $maxBytes);
         } catch (UnsafeUrl $e) {
             throw ScrapeFailed::unsafeUrl($e);
+        } catch (ResponseTooLarge $e) {
+            throw ScrapeFailed::tooLarge($e->bytes);
         } catch (ConnectionException $e) {
             throw ScrapeFailed::connection($e);
         }
@@ -38,9 +44,16 @@ final class PageFetcher
             throw ScrapeFailed::httpStatus($response->status());
         }
 
+        $declared = (int) $response->header('Content-Length');
+
+        if ($declared > $maxBytes) {
+            throw ScrapeFailed::tooLarge($declared);
+        }
+
         $body = $response->body();
 
-        if (strlen($body) > (int) config('scraping.max_body_bytes')) {
+        // Last line of defence, e.g. for a body that grew while being decompressed.
+        if (strlen($body) > $maxBytes) {
             throw ScrapeFailed::tooLarge(strlen($body));
         }
 

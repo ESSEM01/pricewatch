@@ -3,6 +3,9 @@
 use App\Scraping\Exceptions\ScrapeFailed;
 use App\Scraping\Http\PageFetcher;
 use App\Scraping\Http\UrlGuard;
+use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Promise\Create;
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -148,4 +151,77 @@ it('refuses oversized pages', function () {
     ]);
 
     expect(failureOf(fn () => fetchPage('https://shop.example/p/1'))->getMessage())->toContain('too large');
+});
+
+it('refuses a page whose declared length is over the limit', function () {
+    config(['scraping.max_body_bytes' => 10]);
+    Http::fake([
+        'shop.example/robots.txt' => Http::response(''),
+        'shop.example/p/1' => Http::response('x', 200, ['Content-Length' => '999']),
+    ]);
+
+    expect(failureOf(fn () => fetchPage('https://shop.example/p/1'))->getMessage())->toContain('too large (999 bytes)');
+});
+
+/**
+ * Plays the transfer the way curl does: reports progress chunk by chunk and
+ * aborts as soon as Guzzle's progress callback returns true.
+ *
+ * @param  array{downloaded: int}  $state
+ */
+function curlLikeTransfer(Request $request, array $options, int $declaredLength, int $bodyLength, array &$state): PromiseInterface
+{
+    while ($state['downloaded'] < $bodyLength) {
+        $state['downloaded'] += 4;
+
+        if (($options['progress'] ?? fn () => false)($declaredLength, $state['downloaded'], 0, 0)) {
+            return Create::rejectionFor(new RequestException('Transfer aborted by progress callback', $request->toPsrRequest()));
+        }
+    }
+
+    return Http::response(str_repeat('x', $bodyLength));
+}
+
+it('stops downloading as soon as the page passes the limit', function () {
+    config(['scraping.max_body_bytes' => 10]);
+    $state = ['downloaded' => 0];
+    Http::fake([
+        'shop.example/robots.txt' => Http::response(''),
+        'shop.example/p/1' => function (Request $request, array $options) use (&$state) {
+            return curlLikeTransfer($request, $options, declaredLength: 0, bodyLength: 5_000_000, state: $state);
+        },
+    ]);
+
+    $failure = failureOf(fn () => fetchPage('https://shop.example/p/1'));
+
+    expect($failure->getMessage())->toContain('too large')
+        ->and($failure->permanent)->toBeFalse()
+        ->and($state['downloaded'])->toBe(12); // the first chunk past 10 bytes, not 5 MB
+});
+
+it('stops before the body when the declared length is over the limit', function () {
+    config(['scraping.max_body_bytes' => 10]);
+    $state = ['downloaded' => -4]; // the first progress report arrives with the headers, 0 bytes in
+    Http::fake([
+        'shop.example/robots.txt' => Http::response(''),
+        'shop.example/p/1' => function (Request $request, array $options) use (&$state) {
+            return curlLikeTransfer($request, $options, declaredLength: 5_000_000, bodyLength: 5_000_000, state: $state);
+        },
+    ]);
+
+    expect(failureOf(fn () => fetchPage('https://shop.example/p/1'))->getMessage())->toContain('too large (5000000 bytes)')
+        ->and($state['downloaded'])->toBe(0);
+});
+
+it('lets pages within the limit through', function () {
+    config(['scraping.max_body_bytes' => 10]);
+    $state = ['downloaded' => 0];
+    Http::fake([
+        'shop.example/robots.txt' => Http::response(''),
+        'shop.example/p/1' => function (Request $request, array $options) use (&$state) {
+            return curlLikeTransfer($request, $options, declaredLength: 8, bodyLength: 8, state: $state);
+        },
+    ]);
+
+    expect(fetchPage('https://shop.example/p/1'))->toBe('xxxxxxxx');
 });
