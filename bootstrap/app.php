@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\ProtectDemoAccount;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -16,6 +17,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(SecurityHeaders::class);
+
         // On every web route, so Fortify's account endpoints are covered too, and
         // before route model binding, so the answer is 403 even for unknown ids.
         $middleware->web(append: [ProtectDemoAccount::class]);
