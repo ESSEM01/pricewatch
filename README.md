@@ -100,7 +100,7 @@ rotation, headless rendering, TimescaleDB).
 ## Quality
 
 ```bash
-composer test   # Pint, Larastan level 7, Pest (286 tests)
+composer test   # Pint, Larastan level 7, Pest (331 tests)
 ```
 
 CI runs the same checks plus `composer audit` on every push. The test suite
