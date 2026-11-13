@@ -67,6 +67,7 @@ final class SafeHttpClient
         }
 
         $tooLarge = null;
+        $sink = null;
 
         if ($maxBytes !== null) {
             // curl reports the declared length as soon as the headers arrive, then
@@ -77,6 +78,10 @@ final class SafeHttpClient
 
                 return $tooLarge !== null;
             };
+
+            // Those are bytes on the wire: a compressed body is counted again,
+            // decoded, as curl writes it to the sink.
+            $options['sink'] = $sink = new LimitedSink($maxBytes);
         }
 
         try {
@@ -86,6 +91,8 @@ final class SafeHttpClient
                 ->withOptions($options)
                 ->get($url);
         } catch (ConnectionException $e) {
+            $tooLarge ??= $sink?->overflow();
+
             throw $tooLarge !== null ? ResponseTooLarge::after($tooLarge) : $e;
         }
     }
