@@ -7,6 +7,7 @@ use App\Scraping\Exceptions\UnsafeUrl;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
@@ -90,10 +91,16 @@ final class SafeHttpClient
                 ->connectTimeout((int) config('scraping.connect_timeout_seconds'))
                 ->withOptions($options)
                 ->get($url);
-        } catch (ConnectionException $e) {
+        } catch (ConnectionException|RequestException $e) {
+            // A transfer cut short after the headers of a 4xx/5xx comes back as a
+            // RequestException carrying that status; it is still a failed transfer.
             $tooLarge ??= $sink?->overflow();
 
-            throw $tooLarge !== null ? ResponseTooLarge::after($tooLarge) : $e;
+            if ($tooLarge !== null) {
+                throw ResponseTooLarge::after($tooLarge);
+            }
+
+            throw $e instanceof ConnectionException ? $e : new ConnectionException($e->getMessage(), 0, $e);
         }
     }
 

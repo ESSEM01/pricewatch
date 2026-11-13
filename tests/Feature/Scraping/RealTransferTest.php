@@ -1,6 +1,7 @@
 <?php
 
 use App\Scraping\Exceptions\ResponseTooLarge;
+use App\Scraping\Exceptions\ScrapeFailed;
 use App\Scraping\Http\PageFetcher;
 use App\Scraping\Http\SafeHttpClient;
 use App\Scraping\Http\UrlGuard;
@@ -55,5 +56,15 @@ it('stops a gzip bomb once the decompressed body passes the limit', function () 
     } catch (ResponseTooLarge $e) {
         // Stopped at the first decoded chunk past the limit, not after 50 MB.
         expect($e->bytes)->toBeGreaterThan(1_000_000)->toBeLessThan(1_100_000);
+    }
+});
+
+it('turns an oversized error page into a scrape failure', function () {
+    try {
+        app(PageFetcher::class)->fetch(RealServer::$origin.'/error-large');
+        $this->fail('Expected ScrapeFailed.');
+    } catch (ScrapeFailed $e) {
+        expect($e->getMessage())->toContain('too large')
+            ->and($e->permanent)->toBeFalse();
     }
 });

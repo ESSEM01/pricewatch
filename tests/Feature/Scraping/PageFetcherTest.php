@@ -4,8 +4,10 @@ use App\Scraping\Exceptions\ScrapeFailed;
 use App\Scraping\Http\PageFetcher;
 use App\Scraping\Http\UrlGuard;
 use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Exception\ResponseException;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Promise\PromiseInterface;
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -239,4 +241,25 @@ it('treats an oversized robots.txt as unreadable', function () {
     expect(failureOf(fn () => fetchPage('https://shop.example/p/1'))->getMessage())->toContain('robots.txt')
         ->and($state['downloaded'])->toBeLessThanOrEqual(500 * 1024 + 4);
     Http::assertNotSent(fn (Request $request) => $request->url() === 'https://shop.example/p/1');
+});
+
+it('turns an error page aborted for its size into a scrape failure', function () {
+    config(['scraping.max_body_bytes' => 10]);
+    Http::fake([
+        'shop.example/robots.txt' => Http::response(''),
+        'shop.example/p/1' => function (Request $request, array $options) {
+            // curl aborts after the headers, so Guzzle's rejection carries the 500 response.
+            $aborted = ($options['progress'])(5_000_000, 0, 0, 0);
+            $response = new Response(500, ['Content-Length' => '5000000']);
+
+            return $aborted
+                ? Create::rejectionFor(new ResponseException('Transfer aborted by progress callback', $request->toPsrRequest(), $response))
+                : Create::promiseFor($response);
+        },
+    ]);
+
+    $failure = failureOf(fn () => fetchPage('https://shop.example/p/1'));
+
+    expect($failure->getMessage())->toContain('too large (5000000 bytes)')
+        ->and($failure->permanent)->toBeFalse();
 });

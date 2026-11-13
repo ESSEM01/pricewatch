@@ -3,6 +3,9 @@
 use App\Scraping\Exceptions\UnsafeUrl;
 use App\Scraping\Http\SafeHttpClient;
 use App\Scraping\Http\UrlGuard;
+use GuzzleHttp\Exception\ResponseException;
+use GuzzleHttp\Promise\Create;
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -129,4 +132,13 @@ it('returns a redirect without a location as it is', function () {
     fakeHops(['https://shop.example/p/1' => Http::response('', 304)]);
 
     expect(app(SafeHttpClient::class)->get('https://shop.example/p/1')->status())->toBe(304);
+});
+
+it('reports a transfer that broke after the headers of an error page as a connection failure', function () {
+    Http::fake(fn (Request $request) => Create::rejectionFor(
+        new ResponseException('Operation timed out', $request->toPsrRequest(), new Response(500)),
+    ));
+
+    expect(fn () => app(SafeHttpClient::class)->get('https://shop.example/p/1'))
+        ->toThrow(ConnectionException::class, 'status code 500');
 });
