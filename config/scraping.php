@@ -24,6 +24,8 @@ return [
     'connect_timeout_seconds' => 5,
     'max_redirects' => 3,
     'max_body_bytes' => 5 * 1024 * 1024,
+    // RFC 9309 §2.5 asks crawlers to read at least 500 KiB; a bigger file counts as unreadable.
+    'robots_max_bytes' => 500 * 1024,
     'robots_cache_hours' => 24,
     // A robots.txt that errors out blocks the site for this long, then is retried.
     'robots_error_cache_minutes' => 60,

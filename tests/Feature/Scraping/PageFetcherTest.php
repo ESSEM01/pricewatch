@@ -225,3 +225,18 @@ it('lets pages within the limit through', function () {
 
     expect(fetchPage('https://shop.example/p/1'))->toBe('xxxxxxxx');
 });
+
+it('treats an oversized robots.txt as unreadable', function () {
+    $state = ['downloaded' => 0];
+    Http::fake([
+        'shop.example/robots.txt' => function (Request $request, array $options) use (&$state) {
+            // 600 KiB, over the 500 KiB a crawler must read (RFC 9309 §2.5).
+            return curlLikeTransfer($request, $options, declaredLength: 0, bodyLength: 600 * 1024, state: $state);
+        },
+        'shop.example/p/1' => Http::response('<html></html>'),
+    ]);
+
+    expect(failureOf(fn () => fetchPage('https://shop.example/p/1'))->getMessage())->toContain('robots.txt')
+        ->and($state['downloaded'])->toBeLessThanOrEqual(500 * 1024 + 4);
+    Http::assertNotSent(fn (Request $request) => $request->url() === 'https://shop.example/p/1');
+});
